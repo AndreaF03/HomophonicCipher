@@ -1,0 +1,42 @@
+import random
+
+# Step 1: Define the homophonic cipher mapping
+homophonic_mapping = {
+    'A': [12, 45, 67], 'B': [23, 56], 'C': [34, 78], 'D': [13, 89], 'E': [11, 22, 33, 44],
+    'F': [55, 66], 'G': [77, 88], 'H': [90, 12], 'I': [21, 31, 41], 'J': [51],
+    'K': [61], 'L': [71, 81], 'M': [91, 14], 'N': [24, 35], 'O': [46, 57],
+    'P': [68, 79], 'Q': [80], 'R': [92, 15], 'S': [25, 36], 'T': [47, 58],
+    'U': [69, 82], 'V': [93], 'W': [16, 26], 'X': [37], 'Y': [48, 59], 'Z': [99]
+}
+
+# Step 2: Create a reverse mapping for decryption
+reverse_mapping = {str(num): letter for letter, values in homophonic_mapping.items() for num in values}
+
+def encrypt(plaintext):
+    ciphertext = []
+    for char in plaintext.upper():
+        if char in homophonic_mapping:
+            ciphertext.append(str(random.choice(homophonic_mapping[char])))
+        else:
+            ciphertext.append(char)  # Keep spaces and special characters unchanged
+    return ' '.join(ciphertext)
+
+def decrypt(ciphertext):
+    plaintext = []
+    for symbol in ciphertext.split():
+        plaintext.append(reverse_mapping.get(symbol, symbol))
+    return ''.join(plaintext)
+
+# User interaction
+if __name__ == "__main__":
+    choice = input("Choose (E)ncrypt or (D)ecrypt: ").strip().upper()
+    if choice == 'E':
+        plaintext = input("Enter message to encrypt: ")
+        encrypted = encrypt(plaintext)
+        print("Encrypted message:", encrypted)
+    elif choice == 'D':
+        ciphertext = input("Enter message to decrypt: ")
+        decrypted = decrypt(ciphertext)
+        print("Decrypted message:", decrypted)
+    else:
+        print("Invalid choice! Choose E or D.")
