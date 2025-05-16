@@ -1,56 +1,102 @@
+import random
+import string
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import random
-
+import json
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend requests
+CORS(app)
 
-# Define the homophonic cipher mapping
-homophonic_mapping = {
-    'A': [12, 45, 67], 'B': [23, 56], 'C': [34, 78], 'D': [13, 89], 'E': [11, 22, 33, 44],
-    'F': [55, 66], 'G': [77, 88], 'H': [90, 12], 'I': [21, 31, 41], 'J': [51],
-    'K': [61], 'L': [71, 81], 'M': [91, 14], 'N': [24, 35], 'O': [46, 57],
-    'P': [68, 79], 'Q': [80], 'R': [92, 15], 'S': [25, 36], 'T': [47, 58],
-    'U': [69, 82], 'V': [93], 'W': [16, 26], 'X': [37], 'Y': [48, 59], 'Z': [99]
-}
+def generate_mapping(key):
+    """
+    Generates a deterministic homophonic mapping based on the user-provided key.
+    Each letter gets one number, derived from key and position.
+    """
+    key = key.lower()
+    alphabet = 'abcdefghijklmnopqrstuvwxyz'
+    mapping = {}
 
-# Reverse mapping for decryption
-reverse_mapping = {str(num): letter for letter, values in homophonic_mapping.items() for num in values}
+    # Remove duplicates while preserving order
+    seen = set()
+    filtered_key = ''.join([ch for ch in key if ch in alphabet and not (ch in seen or seen.add(ch))])
 
-def encrypt(plaintext):
-    ciphertext = []
-    for char in plaintext.upper():
-        if char in homophonic_mapping:
-            ciphertext.append(str(random.choice(homophonic_mapping[char])))
-        else:
-            ciphertext.append(char)  # Keep spaces and special characters
-    return ' '.join(ciphertext)
+    # Generate mapping using key + rest of alphabet
+    ordered = filtered_key + ''.join([ch for ch in alphabet if ch not in filtered_key])
 
-def decrypt(ciphertext):
-    print("Received ciphertext:", ciphertext)  # Debugging step
-    plaintext = []
-    for symbol in ciphertext.split():
-        if symbol in reverse_mapping:
-            plaintext.append(reverse_mapping[symbol])
-        else:
-            plaintext.append("?")  
-    print("Decrypted plaintext:", "".join(plaintext)) 
-    return "".join(plaintext)
+    for idx, letter in enumerate(ordered):
+        # Use index + 1 as the code (or base it on ASCII/position for more complexity)
+        mapping[letter] = [str(10 + idx)]  # Single code per letter (can be extended to multiple codes)
+    
+    return mapping
 
+
+def reverse_mapping(mapping):
+    return {code: letter for letter, codes in mapping.items() for code in codes}
 
 @app.route('/encrypt', methods=['POST'])
-def encrypt_message():
+def encrypt():
     data = request.json
-    plaintext = data.get('text', '')
-    encrypted_text = encrypt(plaintext)
-    return jsonify({"encrypted": encrypted_text})
+    text = data.get('text', '').lower()
+    key = data.get('key', '').lower()
+
+    mapping = generate_mapping(key)
+    cipher_nums = []
+
+    for char in text:
+        if char in mapping:
+            cipher_nums.append(mapping[char][0])  # Deterministic, no randomness
+        else:
+            cipher_nums.append(char)  # Keep non-alphabet characters as-is
+
+    return jsonify({
+        "encrypted": ' '.join(cipher_nums),
+        "mapping": mapping
+    })
+@app.route('/decrypt', methods=['POST'])
+def decrypt():
+    data = request.json
+    cipher_text = data.get('text', '')
+    mapping = data.get('mapping', {})
+
+    # Create reverse mapping
+    rev_mapping = {}
+    for char, nums in mapping.items():
+        for num in nums:
+            rev_mapping[num] = char
+
+    tokens = cipher_text.strip().split()
+    decrypted = ''.join([rev_mapping.get(tok, '?') for tok in tokens])
+
+    return jsonify({"decrypted": decrypted})
+
+@app.route('/encrypt', methods=['POST'])
+def encrypt_msg():
+    data = request.json
+    text = data.get('text', '')
+    key  = data.get('key', '')
+    cipher, mapping = encrypt(text, key)
+    return jsonify(encrypted=cipher, mapping=mapping)
+
 
 @app.route('/decrypt', methods=['POST'])
 def decrypt_message():
     data = request.json
-    ciphertext = data.get('text', '')
-    decrypted_text = decrypt(ciphertext)
-    return jsonify({"decrypted": decrypted_text})
+    ciphertext = data.get('text', '').strip()
+    mapping = data.get('mapping')  # <-- Accept mapping directly
+
+    if not mapping:
+        # Fallback to key if mapping not provided
+        key = data.get('key', '')
+        mapping = generate_full_mapping(key)
+
+    rev_map = reverse_mapping(mapping)
+
+    tokens = ciphertext.split() if ' ' in ciphertext else [
+        ciphertext[i:i+2] for i in range(0, len(ciphertext), 2)
+    ]
+
+    plaintext = ''.join(rev_map.get(tok, tok) for tok in tokens)
+    return jsonify({"decrypted": plaintext})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
